@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# CDK output
+cdk.out/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+
+# TypeScript
+*.js
+*.d.ts
+*.js.map
+!jest.config.js
+
+# Coverage
+coverage/
+
+# Environment (contains personal details)
+.env
