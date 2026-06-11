@@ -4,8 +4,8 @@
 # Run from the project root after deployment
 #
 # Profiles:
-#   seb     = management account (401955065246)
-#   maxi80  = member account (743602823695)
+#   seb     = management account (123456789012)
+#   maxi80  = member account (987654321098)
 #
 set -e
 

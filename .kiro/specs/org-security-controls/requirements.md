@@ -123,7 +123,7 @@ This document defines the requirements for an AWS CDK project that implements an
 #### Acceptance Criteria
 
 1. THE CDK_Stack SHALL create an organization-level CloudTrail trail that captures management events for all accounts in the organization
-2. THE CDK_Stack SHALL configure the trail to deliver events to the default EventBridge event bus in the management account (account 401955065246), conditional on management event capture being enabled
+2. THE CDK_Stack SHALL configure the trail to deliver events to the default EventBridge event bus in the management account (account 123456789012), conditional on management event capture being enabled
 3. THE CDK_Stack SHALL create an S3 bucket for trail log storage with appropriate bucket policy allowing CloudTrail writes from the organization
 4. THE CDK_Stack SHALL enable the trail for all regions to capture events regardless of where they originate
 

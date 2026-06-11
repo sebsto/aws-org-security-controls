@@ -9,7 +9,7 @@ This design describes an AWS CDK (TypeScript) stack that deploys an organization
 3. **Organization CloudTrail + EventBridge Notifier** — An organization-level trail delivering management events to the default EventBridge bus, where precise rules route specific security events to a single Lambda that formats and sends SES email alerts.
 4. **Watchdog Lambda** — A weekly-scheduled Lambda that assumes into each member account, stops idle compute/database resources, releases unused EIPs, enforces log retention, reports wasted resources, and emails a structured execution summary.
 
-The stack deploys entirely in the management account (401955065246) and uses the `OrganizationAccountAccessRole` for cross-account operations into member account(s) (e.g., 743602823695).
+The stack deploys entirely in the management account (123456789012) and uses the `OrganizationAccountAccessRole` for cross-account operations into member account(s) (e.g., 987654321098).
 
 ### Design Decisions
 
@@ -29,7 +29,7 @@ The stack deploys entirely in the management account (401955065246) and uses the
 
 ```mermaid
 graph TB
-    subgraph "Management Account (401955065246)"
+    subgraph "Management Account (123456789012)"
         subgraph "CDK Stack"
             SCP_Engine["SCP Engine<br/>(CfnPolicy × 1)"]
             IDC_MFA["Identity Center MFA<br/>(CfnInstanceConfiguration)"]
@@ -133,7 +133,7 @@ A CDK Construct wrapping the organization-level CloudTrail trail and its S3 buck
 
 ```typescript
 interface OrgTrailProps {
-  organizationId: string;           // e.g. 'o-lzfhtgvhr7'
+  organizationId: string;           // e.g. 'o-xxxxxxxxxx'
   trailName?: string;               // default: 'OrgSecurityTrail'
 }
 ```
@@ -396,7 +396,7 @@ interface AccountSummary {
 
 ### Property 5: Management Account Exclusion
 
-*For any* list of AWS accounts returned by `Organizations.listAccounts()` that includes the management account (401955065246), the Watchdog Lambda's account filtering logic SHALL return a list that excludes the management account while preserving all other accounts in their original order.
+*For any* list of AWS accounts returned by `Organizations.listAccounts()` that includes the management account (123456789012), the Watchdog Lambda's account filtering logic SHALL return a list that excludes the management account while preserving all other accounts in their original order.
 
 **Validates: Requirements 15.1**
 

@@ -9,7 +9,7 @@ describe('OrgTrail Construct', () => {
     const app = new cdk.App();
     const stack = new cdk.Stack(app, 'TestStack');
     new OrgTrail(stack, 'TestTrail', {
-      organizationId: 'o-lzfhtgvhr7',
+      organizationId: 'o-xxxxxxxxxx',
     });
     template = Template.fromStack(stack);
   });
@@ -77,7 +77,7 @@ describe('OrgTrail Construct', () => {
               },
               Condition: {
                 StringEquals: {
-                  'aws:SourceOrgID': 'o-lzfhtgvhr7',
+                  'aws:SourceOrgID': 'o-xxxxxxxxxx',
                 },
               },
             }),
@@ -99,7 +99,7 @@ describe('OrgTrail Construct', () => {
               Condition: {
                 StringEquals: {
                   's3:x-amz-acl': 'bucket-owner-full-control',
-                  'aws:SourceOrgID': 'o-lzfhtgvhr7',
+                  'aws:SourceOrgID': 'o-xxxxxxxxxx',
                 },
               },
             }),
@@ -114,7 +114,7 @@ describe('OrgTrail Construct', () => {
       const app = new cdk.App();
       const stack = new cdk.Stack(app, 'CustomNameStack');
       new OrgTrail(stack, 'CustomTrail', {
-        organizationId: 'o-lzfhtgvhr7',
+        organizationId: 'o-xxxxxxxxxx',
         trailName: 'MyCustomTrail',
       });
       const customTemplate = Template.fromStack(stack);

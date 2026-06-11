@@ -2,7 +2,7 @@
 
 ## Overview
 
-This plan implements an AWS Organizations security and cost-control system using AWS CDK (TypeScript). The stack deploys SCPs, an organization-level CloudTrail trail, EventBridge rules for real-time alerting, a Notifier Lambda for formatted email alerts, and a Watchdog Lambda for weekly cost-control enforcement across member accounts. All resources deploy in the management account (401955065246).
+This plan implements an AWS Organizations security and cost-control system using AWS CDK (TypeScript). The stack deploys SCPs, an organization-level CloudTrail trail, EventBridge rules for real-time alerting, a Notifier Lambda for formatted email alerts, and a Watchdog Lambda for weekly cost-control enforcement across member accounts. All resources deploy in the management account (123456789012).
 
 ## Tasks
 
@@ -56,7 +56,7 @@ This plan implements an AWS Organizations security and cost-control system using
 
 - [x] 3. Organization Trail construct
   - [x] 3.1 Implement the Organization Trail construct (`lib/org-trail.ts`)
-    - Create S3 bucket with bucket policy allowing CloudTrail writes from the organization (`o-lzfhtgvhr7`)
+    - Create S3 bucket with bucket policy allowing CloudTrail writes from the organization (`o-xxxxxxxxxx`)
     - Configure bucket with lifecycle rules, encryption, and block public access
     - Create CloudTrail trail with `IsOrganizationTrail: true`, `IsMultiRegionTrail: true`, management events enabled (read + write)
     - EventBridge integration is automatic when management events are captured
@@ -120,7 +120,7 @@ This plan implements an AWS Organizations security and cost-control system using
 - [x] 7. Watchdog Lambda implementation
   - [x] 7.1 Implement Watchdog Lambda core handler and account discovery (`lambda/watchdog/handler.ts`)
     - Implement main handler triggered by EventBridge scheduled event
-    - Call Organizations `ListAccounts` to get member accounts, filtering out management account (401955065246)
+    - Call Organizations `ListAccounts` to get member accounts, filtering out management account (123456789012)
     - Assume `OrganizationAccountAccessRole` in each member account with 3600s session duration
     - Handle role assumption failures: log and continue to next account
     - Handle Organizations ListAccounts failure: log and abort
@@ -158,7 +158,7 @@ This plan implements an AWS Organizations security and cost-control system using
     - _Requirements: 21.1, 21.2, 21.3, 21.4, 21.5_
   - [x] 7.8 Write property test: Management Account Exclusion
     - **Property 5: Management Account Exclusion**
-    - Use fast-check to generate random account lists (1-50 accounts) always including management account ID `401955065246`
+    - Use fast-check to generate random account lists (1-50 accounts) always including management account ID `123456789012`
     - Assert filtered list excludes management account while preserving all other accounts in original order
     - Minimum 100 iterations
     - **Validates: Requirements 15.1**
@@ -237,7 +237,7 @@ This plan implements an AWS Organizations security and cost-control system using
 - Unit tests validate specific examples and edge cases
 - CDK assertion tests verify synthesized CloudFormation template correctness
 - All Lambda code uses AWS SDK v3 for Node.js 20.x
-- Management account: 401955065246, Organization: o-lzfhtgvhr7, Member account: 743602823695
+- Management account: 123456789012, Organization: o-xxxxxxxxxx, Member account: 987654321098
 
 ## Task Dependency Graph
 
