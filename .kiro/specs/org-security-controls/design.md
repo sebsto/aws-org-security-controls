@@ -4,9 +4,10 @@
 
 This design describes an AWS CDK (TypeScript) stack that deploys an organization-level security and cost-control system across three pillars:
 
-1. **Service Control Policies (SCPs)** — Preventive guardrails attached to the organization root, enforcing region restriction, instance class/type limits, audit protection, identity controls, and MFA enforcement.
-2. **Organization CloudTrail + EventBridge Notifier** — An organization-level trail delivering management events to the default EventBridge bus, where precise rules route specific security events to a single Lambda that formats and sends SES email alerts.
-3. **Watchdog Lambda** — A weekly-scheduled Lambda that assumes into each member account, stops idle compute/database resources, releases unused EIPs, enforces log retention, reports wasted resources, and emails a structured execution summary.
+1. **Service Control Policies (SCPs)** — Preventive guardrails attached to the organization root, enforcing region restriction, instance class/type limits, audit protection, and identity controls.
+2. **Identity Center MFA Configuration** — Enforces multi-factor authentication at the identity provider level for all human users signing in through AWS Identity Center.
+3. **Organization CloudTrail + EventBridge Notifier** — An organization-level trail delivering management events to the default EventBridge bus, where precise rules route specific security events to a single Lambda that formats and sends SES email alerts.
+4. **Watchdog Lambda** — A weekly-scheduled Lambda that assumes into each member account, stops idle compute/database resources, releases unused EIPs, enforces log retention, reports wasted resources, and emails a structured execution summary.
 
 The stack deploys entirely in the management account (401955065246) and uses the `OrganizationAccountAccessRole` for cross-account operations into member account(s) (e.g., 743602823695).
 
@@ -17,7 +18,7 @@ The stack deploys entirely in the management account (401955065246) and uses the
 | Single CDK stack | All resources are management-account scoped; no cross-account CDK deployment needed |
 | `CfnPolicy` for SCPs | CDK's L2 Organizations constructs are limited; `CfnPolicy` gives full control over policy JSON |
 | Bundled DenyServices SCP | Organizations limits SCPs per target; bundling 7 deny statements into one policy conserves quota |
-| Separate EnforceMFA SCP | Distinct policy for MFA enforcement keeps logic isolated and allows independent attachment |
+| Identity Center MFA enforcement | MFA is enforced at the IdP level because SCP-based MFA enforcement (`aws:MultiFactorAuthPresent`) doesn't work for federated/assumed-role sessions — the condition key is never set for SSO sessions |
 | One EventBridge rule per event type | Cost minimization — Lambda only invoked for matching events; no post-invocation filtering |
 | Single Notifier Lambda with formatters | Centralizes notification logic; formatters are pure functions selected by event type |
 | SES-only delivery | No Slack integration required; SES is lowest-cost, simplest path |
@@ -30,7 +31,8 @@ The stack deploys entirely in the management account (401955065246) and uses the
 graph TB
     subgraph "Management Account (401955065246)"
         subgraph "CDK Stack"
-            SCP_Engine["SCP Engine<br/>(CfnPolicy × 2)"]
+            SCP_Engine["SCP Engine<br/>(CfnPolicy × 1)"]
+            IDC_MFA["Identity Center MFA<br/>(CfnInstanceConfiguration)"]
             OrgTrail["Organization Trail<br/>(CloudTrail)"]
             S3Bucket["Trail Log Bucket<br/>(S3)"]
             EB_Rules["EventBridge Rules<br/>(17 rules on default bus)"]
@@ -69,25 +71,27 @@ graph TB
     MemberRole -.->|"access"| CWLogs
     
     SCP_Engine -->|"attached to org root"| MemberRole
+    IDC_MFA -->|"enforces MFA at sign-in"| SES
 ```
 
 ### Data Flow
 
-1. **SCP Enforcement**: SCPs are attached to the organization root at deploy time. AWS evaluates them on every API call in member accounts.
-2. **Real-time Notifications**: CloudTrail → default EventBridge bus → matching rule → Notifier Lambda → SES email.
-3. **Weekly Cost Control**: EventBridge Schedule → Watchdog Lambda → AssumeRole into each member account → enumerate & act → SES execution report.
+1. **SCP Enforcement**: The DenyServices SCP is attached to the organization root at deploy time. AWS evaluates it on every API call in member accounts.
+2. **Identity Center MFA**: Identity Center is configured to require MFA at sign-in. Users without MFA are prompted to register a device.
+3. **Real-time Notifications**: CloudTrail → default EventBridge bus → matching rule → Notifier Lambda → SES email.
+4. **Weekly Cost Control**: EventBridge Schedule → Watchdog Lambda → AssumeRole into each member account → enumerate & act → SES execution report.
 
 ## Components and Interfaces
 
 ### 1. SCP Engine (`lib/scp-engine.ts`)
 
-A CDK Construct that builds and deploys two SCP policies.
+A CDK Construct that builds and deploys the DenyServices SCP policy.
 
 ```typescript
 interface ScpEngineProps {
   approvedRegions: string[];              // e.g. ['eu-west-1', 'eu-west-3', 'eu-central-1', 'us-east-1']
   allowedRdsClasses: string[];            // e.g. ['db.t3.micro', 'db.t3.small', 'db.t4g.micro', 'db.t4g.small']
-  allowedEc2Types: string[];              // e.g. ['t4g.nano', 't4g.micro']
+  allowedEc2Types: string[];             // e.g. ['t4g.nano', 't4g.micro']
   bedrockAllowedPrincipals: string[];     // 0-20 ARN patterns
   breakGlassRoleArn?: string;             // Optional CloudTrail break-glass exclusion
   organizationRootId: string;             // Target for policy attachment
@@ -97,14 +101,33 @@ interface ScpEngineProps {
 **Responsibilities:**
 - Build the DenyServices policy document (7 statements, unique Sids)
 - Validate combined policy ≤ 5120 characters at synthesis time
-- Build the EnforceMFA policy document
-- Create `CfnPolicy` resources and attach to organization root
+- Create `CfnPolicy` resource and attach to organization root
 
 **Validation Logic (synthesis-time):**
 - If `approvedRegions` is empty → throw synthesis error
 - If serialized DenyServices JSON > 5120 chars → throw synthesis error with current size
 
-### 2. Organization Trail (`lib/org-trail.ts`)
+### 2. Identity Center MFA Configuration (`lib/identity-center-mfa.ts`)
+
+A CDK Construct that configures AWS Identity Center to enforce MFA for all users.
+
+```typescript
+interface IdentityCenterMfaProps {
+  instanceArn: string;             // Identity Center instance ARN
+}
+```
+
+**Responsibilities:**
+- Configure Identity Center authentication settings to require MFA at sign-in
+- Enable "prompt for MFA registration" so users without MFA are required to register a device before access
+- Accept authenticator apps and hardware security keys as valid MFA methods
+
+**Implementation:**
+- Uses `CfnInstanceConfiguration` (or custom resource if L1 is unavailable) to set MFA enforcement settings
+- Configures `AuthenticationMethodType` to require MFA
+- Enables `REQUIRED` MFA mode so that users without a registered MFA device are prompted to enroll
+
+### 3. Organization Trail (`lib/org-trail.ts`)
 
 A CDK Construct wrapping the organization-level CloudTrail trail and its S3 bucket.
 
@@ -121,7 +144,7 @@ interface OrgTrailProps {
 - Enable management event capture (read + write)
 - EventBridge integration is automatic when management events are captured on a trail
 
-### 3. EventBridge Rules (`lib/eventbridge-rules.ts`)
+### 4. EventBridge Rules (`lib/eventbridge-rules.ts`)
 
 A CDK Construct defining 17 EventBridge rules on the default bus.
 
@@ -158,7 +181,7 @@ interface EventBridgeRulesProps {
 | AccessAnalyzerFinding | aws.access-analyzer | Access Analyzer Finding | (no detail filter) |
 | OrganizationEvent | aws.organizations | AWS API Call via CloudTrail | (any organizations API call) |
 
-### 4. Notifier Lambda (`lambda/notifier/`)
+### 5. Notifier Lambda (`lambda/notifier/`)
 
 ```typescript
 // Handler signature
@@ -187,7 +210,7 @@ interface EmailMessage {
 - `RECIPIENT_EMAIL` — SES recipient address
 - `SENDER_EMAIL` — SES verified sender address
 
-### 5. Watchdog Lambda (`lambda/watchdog/`)
+### 6. Watchdog Lambda (`lambda/watchdog/`)
 
 ```typescript
 // Handler signature
@@ -457,7 +480,8 @@ interface AccountSummary {
 
 Unit tests cover specific examples, edge cases, and integration points:
 
-- **SCP Engine**: Verify exact policy JSON for known configurations; test empty regions error; test 5120-char boundary; test EnforceMFA policy structure
+- **SCP Engine**: Verify exact policy JSON for known configurations; test empty regions error; test 5120-char boundary
+- **Identity Center MFA**: Verify CfnInstanceConfiguration is created with correct MFA enforcement settings
 - **EventBridge Rules**: CDK assertion tests verifying 17 rules exist with correct patterns, targets, and retry config
 - **Organization Trail**: CDK assertion tests for trail, bucket, and policy configuration
 - **Notifier Lambda**: Test each of the 17 formatters with example events; test generic fallback; test missing env var handling

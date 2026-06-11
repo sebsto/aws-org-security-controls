@@ -18,8 +18,8 @@ describe('ScpEngine CDK Assertions', () => {
     template = Template.fromStack(stack);
   });
 
-  test('template has exactly 2 AWS::Organizations::Policy resources', () => {
-    template.resourceCountIs('AWS::Organizations::Policy', 2);
+  test('template has exactly 1 AWS::Organizations::Policy resource', () => {
+    template.resourceCountIs('AWS::Organizations::Policy', 1);
   });
 
   describe('DenyServices policy', () => {
@@ -50,30 +50,4 @@ describe('ScpEngine CDK Assertions', () => {
     });
   });
 
-  describe('EnforceMFA policy', () => {
-    test('has Name "EnforceMFA", Type "SERVICE_CONTROL_POLICY", and TargetIds containing org root', () => {
-      template.hasResourceProperties('AWS::Organizations::Policy', {
-        Name: 'EnforceMFA',
-        Type: 'SERVICE_CONTROL_POLICY',
-        TargetIds: Match.arrayWith(['r-abc1']),
-      });
-    });
-
-    test('Content has a statement with BoolIfExists condition', () => {
-      template.hasResourceProperties('AWS::Organizations::Policy', {
-        Name: 'EnforceMFA',
-        Content: Match.objectLike({
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Condition: Match.objectLike({
-                BoolIfExists: {
-                  'aws:MultiFactorAuthPresent': 'false',
-                },
-              }),
-            }),
-          ]),
-        }),
-      });
-    });
-  });
 });

@@ -151,42 +151,11 @@ export function buildDenyServicesPolicy(props: ScpEngineProps): object {
 }
 
 /**
- * Builds the EnforceMFA SCP policy document.
- * Denies all actions when MFA is not present, excluding MFA self-service actions.
- */
-export function buildEnforceMfaPolicy(): object {
-  return {
-    Version: '2012-10-17',
-    Statement: [
-      {
-        Sid: 'DenyAllWithoutMFA',
-        Effect: 'Deny',
-        NotAction: [
-          'iam:CreateVirtualMFADevice',
-          'iam:EnableMFADevice',
-          'iam:GetUser',
-          'iam:ListMFADevices',
-          'iam:ListVirtualMFADevices',
-          'iam:ResyncMFADevice',
-        ],
-        Resource: '*',
-        Condition: {
-          BoolIfExists: {
-            'aws:MultiFactorAuthPresent': 'false',
-          },
-        },
-      },
-    ],
-  };
-}
-
-/**
  * SCP Engine CDK Construct.
- * Builds and deploys Service Control Policies to the organization root.
+ * Builds and deploys the DenyServices Service Control Policy to the organization root.
  */
 export class ScpEngine extends Construct {
   public readonly denyServicesPolicy: object;
-  public readonly enforceMfaPolicy: object;
 
   constructor(scope: Construct, id: string, props: ScpEngineProps) {
     super(scope, id);
@@ -194,22 +163,11 @@ export class ScpEngine extends Construct {
     // Build the DenyServices policy document (includes validation)
     this.denyServicesPolicy = buildDenyServicesPolicy(props);
 
-    // Build the EnforceMFA policy document
-    this.enforceMfaPolicy = buildEnforceMfaPolicy();
-
     // Create CfnPolicy for DenyServices
     new organizations.CfnPolicy(this, 'DenyServicesPolicy', {
       name: 'DenyServices',
       type: 'SERVICE_CONTROL_POLICY',
       content: this.denyServicesPolicy,
-      targetIds: [props.organizationRootId],
-    });
-
-    // Create CfnPolicy for EnforceMFA
-    new organizations.CfnPolicy(this, 'EnforceMfaPolicy', {
-      name: 'EnforceMFA',
-      type: 'SERVICE_CONTROL_POLICY',
-      content: this.enforceMfaPolicy,
       targetIds: [props.organizationRootId],
     });
   }

@@ -29,8 +29,8 @@ describe('OrgSecurityControlsStack CDK Assertions', () => {
   });
 
   describe('Resource counts', () => {
-    test('template has exactly 2 AWS::Organizations::Policy resources', () => {
-      template.resourceCountIs('AWS::Organizations::Policy', 2);
+    test('template has exactly 1 AWS::Organizations::Policy resource', () => {
+      template.resourceCountIs('AWS::Organizations::Policy', 1);
     });
 
     test('template has 1 AWS::CloudTrail::Trail resource', () => {

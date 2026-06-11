@@ -46,9 +46,38 @@ Nothing to do. AWS automatically provisions `OrganizationAccountAccessRole` in t
 The role is **not** created automatically. After the account accepts the invitation:
 
 1. Sign into the new member account as an administrator
-2. Create an IAM role named `OrganizationAccountAccessRole` with:
-   - **Trust policy**: Allow the management account to assume it
-   - **Permissions**: Attach the `AdministratorAccess` managed policy (or a scoped-down policy covering EC2, ECS, RDS, EIP, ELB, CloudWatch Logs, and STS)
+2. Create the `OrganizationAccountAccessRole` IAM role:
+   ```bash
+   # Run these from the NEW MEMBER ACCOUNT (not the management account)
+   
+   # Create the trust policy file
+   cat > /tmp/trust-policy.json << 'EOF'
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Effect": "Allow",
+         "Principal": {
+           "AWS": "arn:aws:iam::<MANAGEMENT_ACCOUNT_ID>:root"
+         },
+         "Action": "sts:AssumeRole"
+       }
+     ]
+   }
+   EOF
+
+   # Create the role
+   aws iam create-role \
+     --role-name OrganizationAccountAccessRole \
+     --assume-role-policy-document file:///tmp/trust-policy.json \
+     --profile <MEMBER_PROFILE>
+
+   # Attach AdministratorAccess (or a scoped-down policy)
+   aws iam attach-role-policy \
+     --role-name OrganizationAccountAccessRole \
+     --policy-arn arn:aws:iam::aws:policy/AdministratorAccess \
+     --profile <MEMBER_PROFILE>
+   ```
 3. Verify the Watchdog Lambda can assume the role:
    ```bash
    aws sts assume-role \
@@ -63,7 +92,7 @@ The role is **not** created automatically. After the account accepts the invitat
 | Component | Coverage |
 |-----------|----------|
 | DenyServices SCP | ✅ Inherited from org root |
-| EnforceMFA SCP | ✅ Inherited from org root |
+| Identity Center MFA | ✅ Enforced at sign-in for all users |
 | Organization CloudTrail | ✅ Captures all accounts |
 | EventBridge notifications | ✅ Events flow from org trail |
 | Watchdog Lambda | ⚠️ Requires role (see above) |
@@ -72,7 +101,8 @@ The role is **not** created automatically. After the account accepts the invitat
 
 ## Architecture
 
-- **SCPs**: 2 policies (DenyServices + EnforceMFA) attached to the organization root
+- **SCPs**: 1 policy (DenyServices) attached to the organization root
+- **Identity Center MFA**: Enforces MFA at the IdP level for all human users
 - **Organization Trail**: Captures management events across all accounts → default EventBridge bus
 - **EventBridge Rules**: 17 rules with precise pattern matching → Notifier Lambda (SES email)
 - **Watchdog Lambda**: Friday schedule, assumes into member accounts, stops idle resources, reports waste

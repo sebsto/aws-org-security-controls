@@ -18,6 +18,7 @@ This document defines the requirements for an AWS CDK project that implements an
 - **Allowed_RDS_Classes**: The set of permitted RDS instance classes (db.t3.micro, db.t3.small, db.t4g.micro, db.t4g.small)
 - **Blocked_EC2_Types**: EC2 instance types denied by policy — replaced by allowlist approach: only types in `Allowed_EC2_Types` are permitted
 - **Allowed_EC2_Types**: The set of permitted EC2 instance types (t4g.nano, t4g.micro)
+- **Identity_Center_MFA**: The MFA configuration applied to AWS Identity Center (SSO) that enforces multi-factor authentication at the identity provider level for all human users
 - **OrganizationAccountAccessRole**: The IAM role in each member account that the Watchdog Lambda assumes for cross-account operations
 
 ## Requirements
@@ -105,15 +106,15 @@ This document defines the requirements for an AWS CDK project that implements an
 3. IF the combined policy exceeds 5120 characters, THEN THE SCP_Engine SHALL raise a synthesis-time error with a message indicating the current policy size in characters and the 5120-character maximum
 4. THE SCP_Engine SHALL produce a valid IAM policy document containing a Version field and a Statement array with exactly seven deny statements
 
-### Requirement 9: Enforce MFA Policy
+### Requirement 9: Identity Center MFA Enforcement
 
-**User Story:** As a security administrator, I want to deny all actions (except MFA self-service) for principals without MFA, so that MFA is effectively mandatory.
+**User Story:** As a security administrator, I want Identity Center configured to require MFA for all users, so that human access is protected by a second factor at the authentication layer.
 
 #### Acceptance Criteria
 
-1. THE SCP_Engine SHALL define a separate policy named "EnforceMFA" that denies all actions (`*`) when the condition `aws:MultiFactorAuthPresent` is false, using the `BoolIfExists` condition operator to also match when the MFA context key is absent
-2. THE SCP_Engine SHALL exclude MFA self-service actions (`iam:CreateVirtualMFADevice`, `iam:EnableMFADevice`, `iam:GetUser`, `iam:ListMFADevices`, `iam:ListVirtualMFADevices`, `iam:ResyncMFADevice`) from the deny
-3. WHEN a principal without MFA attempts any action other than MFA setup, THE EnforceMFA policy SHALL deny the request
+1. THE CDK_Stack SHALL configure Identity Center authentication settings to require MFA for all users during sign-in
+2. IF a user attempts to sign in without MFA configured, THEN Identity Center SHALL prompt them to register an MFA device before allowing access
+3. THE Identity Center MFA configuration SHALL accept authenticator apps and hardware security keys as MFA methods
 
 ### Requirement 10: Organization CloudTrail Trail
 

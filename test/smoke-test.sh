@@ -14,6 +14,8 @@ MEMBER_PROFILE="maxi80"
 REGION="eu-west-1"
 UNAPPROVED_REGION="ap-southeast-1"
 WATCHDOG_FUNCTION="OrgSecurityControlsStack-WatchdogLambdaCF2B57E4-aZC0GGm8a0H6"
+X86_AMI="ami-0d36f874f92143e29"
+VPC_ID="vpc-7672c012"
 
 echo "============================================"
 echo "  Org Security Controls - Smoke Test"
@@ -26,16 +28,16 @@ echo "  Attempting ec2:DescribeInstances in ${UNAPPROVED_REGION} from member acc
 if aws ec2 describe-instances --region $UNAPPROVED_REGION --profile $MEMBER_PROFILE 2>&1 | grep -q "explicit deny"; then
   echo "  ✅ PASS - Denied by SCP (region restriction)"
 else
-  echo "  ⚠️  Possibly denied by EnforceMFA instead. Check error message."
+  echo "  ❌ FAIL - Request was not denied"
 fi
 echo ""
 
 # ─── TEST 2: SCP - EC2 Instance Type Restriction ──────────────────────────────
 echo "▶ Test 2: SCP - EC2 type restriction (blocked type: m5.large)"
 echo "  Attempting ec2:RunInstances with m5.large in ${REGION} from member account..."
-if aws ec2 run-instances --instance-type m5.large --image-id ami-0ca80f80bf97f59cb \
-  --region $REGION --profile $MEMBER_PROFILE 2>&1 | grep -q "denied\|not authorized"; then
-  echo "  ✅ PASS - Denied (SCP or MFA enforcement)"
+if aws ec2 run-instances --instance-type m5.large --image-id $X86_AMI --dry-run \
+  --region $REGION --profile $MEMBER_PROFILE 2>&1 | grep -q "denied\|not authorized\|UnauthorizedOperation"; then
+  echo "  ✅ PASS - Denied by SCP (EC2 type restriction)"
 else
   echo "  ❌ FAIL - Request was not denied"
 fi
@@ -68,6 +70,7 @@ echo "  Creating security group in management account..."
 SG_ID=$(aws ec2 create-security-group \
   --group-name smoke-test-alert-$(date +%s) \
   --description "smoke test - will be deleted" \
+  --vpc-id $VPC_ID \
   --region $REGION --profile $MGMT_PROFILE \
   --query 'GroupId' --output text)
 
@@ -108,8 +111,7 @@ echo "============================================"
 echo "  Summary"
 echo "============================================"
 echo ""
-echo "  Tests 1-4: SCP enforcement (may show EnforceMFA denial"
-echo "             instead of specific SCP - both confirm SCPs work)"
+echo "  Tests 1-4: SCP enforcement (DenyServices policy)"
 echo ""
 echo "  Test 5: Check email for SecurityGroupIngress alert"
 echo "  Test 6: Check email for Watchdog execution report"
@@ -117,8 +119,4 @@ echo ""
 echo "  NOTE: The Watchdog will report role assumption failure for"
 echo "  account 743602823695 because OrganizationAccountAccessRole"
 echo "  does not exist there yet (invited account)."
-echo ""
-echo "  To fully test SCP enforcement independently of EnforceMFA,"
-echo "  temporarily detach EnforceMFA from the org root, or assume"
-echo "  the member account role with MFA."
 echo "============================================"
