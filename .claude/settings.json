@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rtk aws *)",
+      "Bash(rtk read *)",
+      "Bash(rtk grep *)",
+      "mcp__aws-mcp__aws___search_documentation",
+      "mcp__aws-mcp__aws___read_documentation",
+      "Bash(aws events *)",
+      "Bash(aws cloudtrail *)",
+      "Bash(rtk ls *)",
+      "Bash(rtk tsc *)",
+      "Bash(rtk jest *)",
+      "Bash(node -e \"try{console.log\\('esbuild', require\\('esbuild'\\).version\\)}catch\\(e\\){console.log\\('NO esbuild:', e.message\\)}\")",
+      "Bash(docker info *)",
+      "Bash(git stash *)",
+      "Bash(npx jest *)",
+      "Bash(CDK_DEFAULT_ACCOUNT=401955065246 SES_REGION=us-east-1 npx cdk list)",
+      "Bash(npm install *)",
+      "Bash(CDK_DEFAULT_ACCOUNT=401955065246 SES_REGION=us-east-1 npx cdk synth OrgSecurityNotifier-ap-south-1)",
+      "Bash(chmod +x bin/bootstrap-all-regions.sh)",
+      "Bash(bash -n bin/bootstrap-all-regions.sh)",
+      "Bash(CDK_DEFAULT_ACCOUNT=401955065246 SES_REGION=us-east-1 npx cdk list --long)",
+      "Bash(CDK_DEFAULT_ACCOUNT=401955065246 SES_REGION=us-east-1 rtk npx cdk list)",
+      "Bash(CDK_DEFAULT_ACCOUNT=401955065246 SES_REGION=us-east-1 npx cdk synth --quiet)",
+      "Bash(node -e ' *)",
+      "Bash(node -e \"require\\('./package.json'\\); console.log\\('package.json valid; deploy script:', require\\('./package.json'\\).scripts.deploy\\)\")",
+      "Bash(grep -n '```mermaid' README.md)",
+      "Bash(CDK_DEFAULT_ACCOUNT=401955065246 SES_REGION=us-east-1 npx cdk synth OrgSecurityNotifier-eu-west-1)",
+      "Bash(CDK_DEFAULT_ACCOUNT=401955065246 SES_REGION=us-east-1 npx cdk synth OrgSecurityControlsStack)",
+      "Bash(aws logs *)"
+    ]
+  }
+}

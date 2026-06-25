@@ -4,17 +4,21 @@ import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 import * as path from 'path';
 import { ScpEngine } from './scp-engine';
 import { OrgTrail } from './org-trail';
-import { EventBridgeRules } from './eventbridge-rules';
+
+export interface OrgSecurityControlsStackProps extends cdk.StackProps {
+  /** Region whose SES is used to send all mail (identities verified once there). */
+  sesRegion: string;
+}
 
 export class OrgSecurityControlsStack extends cdk.Stack {
-  public readonly notifierLambda: nodejs.NodejsFunction;
   public readonly watchdogLambda: nodejs.NodejsFunction;
 
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props: OrgSecurityControlsStackProps) {
     super(scope, id, props);
 
     // Read configuration from CDK context
@@ -44,39 +48,24 @@ export class OrgSecurityControlsStack extends cdk.Stack {
       organizationId,
     });
 
-    // Create Notifier Lambda
-    this.notifierLambda = new nodejs.NodejsFunction(this, 'NotifierLambda', {
-      runtime: lambda.Runtime.NODEJS_20_X,
-      handler: 'handler',
-      entry: path.join(__dirname, '..', 'lambda', 'notifier', 'handler.ts'),
-      environment: {
-        RECIPIENT_EMAIL: recipientEmail,
-        SENDER_EMAIL: senderEmail,
-      },
-      bundling: {
-        minify: true,
-        sourceMap: true,
-      },
+    // Explicit log group with 30-day retention to keep CloudWatch Logs cost minimal.
+    // (The default Lambda log group never expires.)
+    const watchdogLogGroup = new logs.LogGroup(this, 'WatchdogLogGroup', {
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
-
-    // Grant SES send permissions to Notifier Lambda
-    this.notifierLambda.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ['ses:SendEmail', 'ses:SendRawEmail'],
-        resources: ['*'],
-      })
-    );
 
     // Create Watchdog Lambda
     this.watchdogLambda = new nodejs.NodejsFunction(this, 'WatchdogLambda', {
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'handler',
       entry: path.join(__dirname, '..', 'lambda', 'watchdog', 'handler.ts'),
+      logGroup: watchdogLogGroup,
       timeout: cdk.Duration.seconds(900),
       environment: {
         RECIPIENT_EMAIL: recipientEmail,
         SENDER_EMAIL: senderEmail,
+        SES_REGION: props.sesRegion,
         APPROVED_REGIONS: approvedRegions.join(','),
         CROSS_ACCOUNT_ROLE_NAME: 'OrganizationAccountAccessRole',
         MANAGEMENT_ACCOUNT_ID: this.account,
@@ -113,11 +102,6 @@ export class OrgSecurityControlsStack extends cdk.Stack {
         resources: ['*'],
       })
     );
-
-    // Instantiate EventBridge Rules construct with Notifier Lambda
-    new EventBridgeRules(this, 'EventBridgeRules', {
-      notifierLambda: this.notifierLambda,
-    });
 
     // Create EventBridge scheduled rule for Watchdog Lambda (Friday cron)
     const watchdogScheduleRule = new events.Rule(this, 'WatchdogScheduleRule', {

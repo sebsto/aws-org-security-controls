@@ -163,7 +163,7 @@ export async function sendReport(
   senderEmail: string,
   recipientEmail: string,
 ): Promise<void> {
-  const sesClient = new SESClient({});
+  const sesClient = new SESClient({ region: process.env.SES_REGION });
   const htmlBody = formatReportHtml(report);
 
   const command = new SendEmailCommand({

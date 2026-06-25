@@ -2,7 +2,9 @@ import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { CloudTrailEventBridgeEvent, Formatter, EmailMessage } from './types';
 import { formatters } from './formatters';
 
-const sesClient = new SESClient({});
+// SES is region-scoped: pin the client to one region (SES_REGION) so identities
+// only need verifying once, even though this Lambda is deployed to many regions.
+const sesClient = new SESClient({ region: process.env.SES_REGION });
 
 /**
  * Returns the array of all registered formatters.

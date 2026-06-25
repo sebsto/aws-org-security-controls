@@ -1,6 +1,6 @@
 # AWS Organization Security Controls
 
-A single CDK stack that secures your AWS Organization with preventive guardrails, real-time alerts, and automated cost control — deployed in minutes from the management account.
+A CDK app that secures your AWS Organization with preventive guardrails, real-time alerts, and automated cost control — deployed in minutes from the management account.
 
 ## Why Use This
 
@@ -9,19 +9,68 @@ Managing security across multiple AWS accounts is tedious. This project gives yo
 - **Preventive controls** — Service Control Policies block dangerous actions before they happen (root usage, unapproved regions, oversized instances, CloudTrail tampering)
 - **Real-time alerts** — 17 EventBridge rules catch security-relevant events and send you an email within minutes (root logins, MFA changes, security group modifications, cost anomalies)
 - **Automated cost enforcement** — A weekly Lambda scans all member accounts and stops idle resources (EC2, RDS, ECS tasks, unused EIPs)
-- **Single deploy** — One `cdk deploy` sets up everything: SCPs, organization trail, event rules, and both Lambda functions
+- **One-command deploy** — A single `npm run deploy` sets up everything: SCPs, organization trail, event rules, and both Lambda functions, across all regions
 
 All of this is infrastructure-as-code, versionable, and customizable through a simple `cdk.json` config.
 
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph mgmt["Management account"]
+        subgraph global["Global stack — OrgSecurityControlsStack (1×, SES region)"]
+            SCP["DenyServices SCP"]
+            TRAIL["Organization CloudTrail"]
+            BUCKET[("S3 log bucket")]
+            WATCHDOG["Watchdog Lambda<br/>(weekly cron)"]
+        end
+
+        subgraph regional["Regional notifier stack — OrgSecurityNotifier-&lt;region&gt; (N×, every region)"]
+            BUS(["Default EventBridge bus"])
+            RULES["17 EventBridge rules"]
+            NOTIFIER["Notifier Lambda"]
+        end
+    end
+
+    SCP -->|attached to| ROOT["Org root → all member accounts"]
+    TRAIL --> BUCKET
+    TRAIL -->|delivers events to each region's| BUS
+    BUS --> RULES
+    RULES -->|match → invoke| NOTIFIER
+    NOTIFIER -->|SES region| SES["Amazon SES → your inbox"]
+    WATCHDOG -->|AssumeRole into| MEMBERS["Member accounts<br/>(stop idle resources)"]
+    WATCHDOG --> SES
+```
+
+**Why the split:** the SCP and the organization trail are org-wide singletons, so they live in one global stack. CloudTrail delivers each event to the default EventBridge bus **in the region where the activity happened** — so the rules + Notifier must exist in every region to catch regional events (security-group changes, CloudTrail tampering, etc.). All Notifier Lambdas send through a single SES region, so email identities are verified only once.
+
+## Deploy scope — what runs where
+
+| Resource | Scope | Regions | Notes |
+|----------|-------|---------|-------|
+| DenyServices SCP | **Global** | 1 (org-wide effect) | Singleton; org policy names must be unique |
+| Organization CloudTrail | **Global** | 1 (multi-region trail) | Captures all accounts + all regions |
+| S3 log bucket | **Global** | 1 | `RETAIN` on destroy |
+| Watchdog Lambda + schedule | **Global** | 1 | Weekly cross-account cost sweep |
+| 17 EventBridge rules | **Regional** | N (all regions) | One copy per region's default bus |
+| Notifier Lambda | **Regional** | N (all regions) | Sends via the single SES region |
+| SES verified identities | **Global** | 1 (SES region) | Verify sender + recipient once |
+| CDK bootstrap stack | **Regional** | N (all regions) | One-off, via `bin/bootstrap-all-regions.sh` |
+
 ## What Gets Deployed
 
-| Component | What It Does |
-|-----------|-------------|
-| **DenyServices SCP** | 7 deny statements attached to the org root — blocks unapproved regions, oversized instances, CloudTrail tampering, root usage, IAM user creation, unauthorized Bedrock access |
-| **Organization CloudTrail** | Management events from all accounts → S3 bucket + default EventBridge bus |
-| **17 EventBridge Rules** | Pattern-match security events → Notifier Lambda |
-| **Notifier Lambda** | Formats event details into readable emails via SES |
-| **Watchdog Lambda** | Runs every Friday, assumes into member accounts, stops waste, emails a report |
+The app is split into two kinds of stacks:
+
+- **One global stack** (`OrgSecurityControlsStack`) — SCP, organization trail, watchdog. Deployed once, in the SES region.
+- **One regional notifier stack per region** (`OrgSecurityNotifier-<region>`) — EventBridge rules + notifier Lambda. CloudTrail delivers events to the default bus in the region where the activity happened, so the notifier is deployed to every region to catch regional events (e.g. security-group changes, CloudTrail tampering) wherever they occur.
+
+| Component | Stack | What It Does |
+|-----------|-------|-------------|
+| **DenyServices SCP** | Global | 7 deny statements attached to the org root — blocks unapproved regions, oversized instances, CloudTrail tampering, root usage, IAM user creation, unauthorized Bedrock access |
+| **Organization CloudTrail** | Global | Management events from all accounts → S3 bucket + default EventBridge bus |
+| **Watchdog Lambda** | Global | Runs every Friday, assumes into member accounts, stops waste, emails a report |
+| **17 EventBridge Rules** | Regional (×N) | Pattern-match security events → Notifier Lambda |
+| **Notifier Lambda** | Regional (×N) | Formats event details into readable emails via SES (all regions send through one SES region) |
 
 ## Security Events Monitored
 
@@ -63,12 +112,17 @@ All behavior is customizable through two files:
 
 ```bash
 CDK_DEFAULT_ACCOUNT=123456789012
-CDK_DEFAULT_REGION=eu-west-1
+CDK_DEFAULT_REGION=us-east-1   # region for the global stack
+SES_REGION=us-east-1           # region all notifier Lambdas send mail through (defaults to CDK_DEFAULT_REGION)
 ORGANIZATION_ID=o-xxxxxxxxxx
 ORGANIZATION_ROOT_ID=r-xxxx
 RECIPIENT_EMAIL=security@example.com
 SENDER_EMAIL=noreply@example.com
 ```
+
+> The set of regions the notifier deploys to is defined by `notifierRegions` in
+> `bin/app.ts` (all commercial regions by default). Override it at deploy time with
+> `-c notifierRegions='["us-east-1","eu-west-1"]'` if you only operate in a few regions.
 
 ## Getting Started
 
@@ -86,12 +140,15 @@ aws organizations enable-policy-type \
 aws organizations enable-aws-service-access \
   --service-principal cloudtrail.amazonaws.com
 
-# Verify SES sender and recipient emails in the deployment region
+# Verify SES sender and recipient emails in the SES region (SES_REGION, e.g. us-east-1)
+# All notifier Lambdas send through this single region, so you only verify once.
 aws ses verify-email-identity --email-address <SENDER_EMAIL>
 aws ses verify-email-identity --email-address <RECIPIENT_EMAIL>
 
-# Bootstrap CDK in the deployment region
-npx cdk bootstrap
+# One-off: bootstrap CDK in every region the notifier deploys into.
+# The notifier stack is deployed to all regions (events are recorded in the region
+# where the activity happens), so each region needs a CDK bootstrap stack once.
+AWS_PROFILE=default bash bin/bootstrap-all-regions.sh
 ```
 
 ### Deploy
@@ -104,11 +161,20 @@ npm install
 cp .env.sample .env
 # Edit .env with your account values
 
-# Deploy
-npx cdk deploy
+# Deploy the global stack (SCP + org trail + watchdog) and all regional
+# notifier stacks in one command. Regional stacks deploy in parallel after
+# the global stack, so a full redeploy stays fast.
+AWS_PROFILE=default CDK_DEFAULT_REGION=us-east-1 npm run deploy
 ```
 
 That's it. SCPs, trail, rules, and Lambdas are all live.
+
+> **Note on architecture:** the stack is split into a single global stack
+> (`OrgSecurityControlsStack` — SCP, organization trail, watchdog) and one
+> regional notifier stack per region (`OrgSecurityNotifier-<region>` —
+> EventBridge rules + notifier Lambda). The `npm run deploy` script runs
+> `cdk deploy --all --concurrency 10 --require-approval never`; each regional
+> stack depends on the global stack, so ordering is automatic.
 
 ## When a New Account Joins the Organization
 
@@ -191,8 +257,13 @@ npm test
 ## Project Structure
 
 ```
-├── bin/              CDK app entry point
-├── lib/              CDK constructs (stack, SCP engine, trail, EventBridge rules)
+├── bin/
+│   ├── app.ts                      CDK app entry point (global stack + per-region notifiers)
+│   └── bootstrap-all-regions.sh    One-off: cdk bootstrap across all notifier regions
+├── lib/
+│   ├── org-security-controls-stack.ts   Global stack (SCP, trail, watchdog)
+│   ├── regional-notifier-stack.ts       Regional stack (EventBridge rules + notifier Lambda)
+│   ├── scp-engine.ts / org-trail.ts / eventbridge-rules.ts   Constructs
 ├── lambda/
 │   ├── notifier/     Email formatting and delivery
 │   └── watchdog/     Weekly cost-control enforcement

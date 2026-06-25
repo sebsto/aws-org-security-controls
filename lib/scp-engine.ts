@@ -115,7 +115,17 @@ export function buildDenyServicesPolicy(props: ScpEngineProps): object {
     Resource: '*',
   });
 
-  // Statement 7: Deny Bedrock access unless principal is in allowlist
+  // Statement 7: Deny IAM user creation
+  statements.push({
+    Sid: 'DenySageMaker',
+    Effect: 'Deny',
+    Action: [
+      'sagemaker:*'
+    ],
+    Resource: '*',
+  });
+
+  // Statement 8: Deny Bedrock access unless principal is in allowlist
   const bedrockStatement: Record<string, unknown> = {
     Sid: 'DenyBedrockUnauthorized',
     Effect: 'Deny',
