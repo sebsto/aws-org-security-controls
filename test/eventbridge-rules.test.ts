@@ -23,12 +23,12 @@ describe('EventBridgeRules construct', () => {
     template = Template.fromStack(stack);
   });
 
-  test('contains exactly 17 AWS::Events::Rule resources', () => {
-    template.resourceCountIs('AWS::Events::Rule', 17);
+  test('contains exactly 18 AWS::Events::Rule resources', () => {
+    template.resourceCountIs('AWS::Events::Rule', 18);
   });
 
-  test('contains exactly 17 AWS::Lambda::Permission resources', () => {
-    template.resourceCountIs('AWS::Lambda::Permission', 17);
+  test('contains exactly 18 AWS::Lambda::Permission resources', () => {
+    template.resourceCountIs('AWS::Lambda::Permission', 18);
   });
 
   describe('event patterns', () => {
@@ -48,7 +48,7 @@ describe('EventBridgeRules construct', () => {
       });
     });
 
-    test('ConsoleLoginNoMFA rule has correct event pattern', () => {
+    test('ConsoleLoginNoMFA rule has correct event pattern and excludes federated principals', () => {
       template.hasResourceProperties('AWS::Events::Rule', {
         Name: 'ConsoleLoginNoMFA',
         EventPattern: {
@@ -58,6 +58,26 @@ describe('EventBridgeRules construct', () => {
             eventName: ['ConsoleLogin'],
             additionalEventData: {
               MFAUsed: ['No'],
+            },
+            userIdentity: {
+              type: [{ 'anything-but': ['AssumedRole', 'Role'] }],
+            },
+          },
+        },
+      });
+    });
+
+    test('IdentityCenterLoginNoMFA rule has correct event pattern', () => {
+      template.hasResourceProperties('AWS::Events::Rule', {
+        Name: 'IdentityCenterLoginNoMFA',
+        EventPattern: {
+          source: ['aws.signin'],
+          'detail-type': ['AWS Service Event via CloudTrail'],
+          detail: {
+            eventSource: ['signin.amazonaws.com'],
+            eventName: ['UserAuthentication'],
+            additionalEventData: {
+              CredentialType: ['PASSWORD'],
             },
           },
         },
@@ -266,10 +286,10 @@ describe('EventBridgeRules construct', () => {
       });
     });
 
-    test('all 17 rules have targets with retry configuration', () => {
+    test('all 18 rules have targets with retry configuration', () => {
       const rules = template.findResources('AWS::Events::Rule');
       const ruleKeys = Object.keys(rules);
-      expect(ruleKeys.length).toBe(17);
+      expect(ruleKeys.length).toBe(18);
 
       for (const key of ruleKeys) {
         const rule = rules[key];

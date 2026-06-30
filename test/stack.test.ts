@@ -149,8 +149,8 @@ describe('RegionalNotifierStack CDK Assertions', () => {
     template = Template.fromStack(stack);
   });
 
-  test('has the 17 security EventBridge rules', () => {
-    template.resourceCountIs('AWS::Events::Rule', 17);
+  test('has the 18 security EventBridge rules', () => {
+    template.resourceCountIs('AWS::Events::Rule', 18);
   });
 
   test('has exactly 1 Notifier Lambda function', () => {

@@ -89,12 +89,12 @@ describe('Property 1: SCP Policy Construction Correctness', () => {
         // Assert Version is 2012-10-17
         expect(policy.Version).toBe('2012-10-17');
 
-        // Assert exactly 7 statements
-        expect(policy.Statement).toHaveLength(7);
+        // Assert exactly 8 statements
+        expect(policy.Statement).toHaveLength(8);
 
         // Assert all Sids are unique
         const sids = policy.Statement.map((s: any) => s.Sid);
-        expect(new Set(sids).size).toBe(7);
+        expect(new Set(sids).size).toBe(8);
 
         // Assert region restriction references exactly the input approvedRegions
         const regionStmt = policy.Statement.find((s: any) => s.Sid === 'DenyOutsideApprovedRegions');

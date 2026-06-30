@@ -16,21 +16,22 @@ describe('buildDenyServicesPolicy', () => {
     expect(policy.Version).toBe('2012-10-17');
   });
 
-  test('produces exactly 7 statements', () => {
+  test('produces exactly 8 statements', () => {
     const policy = buildDenyServicesPolicy(baseProps) as any;
-    expect(policy.Statement).toHaveLength(7);
+    expect(policy.Statement).toHaveLength(8);
   });
 
   test('all statements have unique Sids', () => {
     const policy = buildDenyServicesPolicy(baseProps) as any;
     const sids = policy.Statement.map((s: any) => s.Sid);
-    expect(new Set(sids).size).toBe(7);
+    expect(new Set(sids).size).toBe(8);
     expect(sids).toContain('DenyOutsideApprovedRegions');
     expect(sids).toContain('DenyUnapprovedRdsClasses');
     expect(sids).toContain('DenyUnapprovedEc2Types');
     expect(sids).toContain('DenyCloudTrailTampering');
     expect(sids).toContain('DenyRootUserActions');
     expect(sids).toContain('DenyIamUserCreation');
+    expect(sids).toContain('DenySageMaker');
     expect(sids).toContain('DenyBedrockUnauthorized');
   });
 

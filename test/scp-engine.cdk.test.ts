@@ -31,12 +31,13 @@ describe('ScpEngine CDK Assertions', () => {
       });
     });
 
-    test('Content has Version "2012-10-17" and Statement array with 7 items', () => {
+    test('Content has Version "2012-10-17" and Statement array with 8 items', () => {
       template.hasResourceProperties('AWS::Organizations::Policy', {
         Name: 'DenyServices',
         Content: Match.objectLike({
           Version: '2012-10-17',
           Statement: Match.arrayEquals([
+            Match.anyValue(),
             Match.anyValue(),
             Match.anyValue(),
             Match.anyValue(),

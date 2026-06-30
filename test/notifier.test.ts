@@ -57,9 +57,9 @@ describe('Notifier Lambda', () => {
   });
 
   // ==========================================
-  // Test Scenario 1: Each of the 17 event types
+  // Test Scenario 1: Each of the event types
   // ==========================================
-  describe('Formatter selection and message formatting for all 17 event types', () => {
+  describe('Formatter selection and message formatting for all event types', () => {
     const eventPayloads: { name: string; event: CloudTrailEventBridgeEvent }[] = [
       {
         name: 'Root Console Login',
@@ -105,6 +105,33 @@ describe('Notifier Lambda', () => {
             requestParameters: {},
             responseElements: { ConsoleLogin: 'Success' },
             additionalEventData: { MFAUsed: 'No' },
+          },
+        }),
+      },
+      {
+        name: 'Identity Center Login Without MFA',
+        event: buildEvent({
+          source: 'aws.signin',
+          'detail-type': 'AWS Service Event via CloudTrail',
+          detail: {
+            eventVersion: '1.08',
+            eventSource: 'signin.amazonaws.com',
+            eventName: 'UserAuthentication',
+            awsRegion: 'us-east-1',
+            sourceIPAddress: '203.0.113.3',
+            userAgent: 'Mozilla/5.0',
+            userIdentity: {
+              type: 'IdentityCenterUser',
+              principalId: '54789458-8001-705b-db09-15eae8613a13',
+              arn: '',
+              accountId: '123456789012',
+            },
+            requestParameters: {},
+            responseElements: {},
+            additionalEventData: {
+              CredentialType: 'PASSWORD',
+              LoginTo: 'https://d-1234567890.awsapps.com/start/',
+            },
           },
         }),
       },
