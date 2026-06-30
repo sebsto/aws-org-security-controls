@@ -21,15 +21,17 @@ const sesRegion = process.env.SES_REGION ?? process.env.CDK_DEFAULT_REGION ?? 'u
 // CloudTrail delivers events to the default bus in the region where the call happened,
 // so global events (root login, IAM, Organizations) only appear in us-east-1, while
 // regional events appear in their own region. The management account is NOT constrained
-// by the region SCP, so cover all enabled regions to catch unexpected-region activity.
+// by the region SCP, so cover all reachable regions to catch unexpected-region activity.
+//
+// Limited to regions where STS is activated for this account: CDK assumes a per-region
+// bootstrap deploy-role via the regional STS endpoint, and regions with STS deactivated
+// throw RegionDisabledException (CDK warns and falls back to caller creds). The omitted
+// regions below are enabled-by-default but have regional STS turned off for this account.
 const notifierRegions = (
   app.node.tryGetContext('notifierRegions') as string[] | undefined
 ) ?? [
   'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
-  'ca-central-1', 'sa-east-1',
-  'eu-west-1', 'eu-west-2', 'eu-west-3', 'eu-central-1', 'eu-north-1',
-  'ap-south-1', 'ap-northeast-1', 'ap-northeast-2', 'ap-northeast-3',
-  'ap-southeast-1', 'ap-southeast-2',
+  'eu-west-1', 'eu-west-3', 'eu-central-1',
 ];
 
 // Global stack: SCP + Organization CloudTrail + Watchdog. Deployed once.
