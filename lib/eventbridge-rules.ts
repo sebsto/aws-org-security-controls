@@ -5,7 +5,7 @@ import { Duration } from 'aws-cdk-lib';
 import { EventBridgeRulesProps } from './types';
 
 /**
- * CDK Construct that defines 17 EventBridge rules on the default bus
+ * CDK Construct that defines 18 EventBridge rules on the default bus
  * for real-time security event notifications.
  *
  * Each rule matches a specific event pattern and targets the Notifier Lambda
@@ -36,7 +36,13 @@ export class EventBridgeRules extends Construct {
       targets: [lambdaTarget],
     });
 
-    // Rule 2: Console Login without MFA
+    // Rule 2: Console Login without MFA (IAM users only)
+    // Federated/SSO console logins always report MFAUsed:No because MFA is
+    // verified upstream at Identity Center before the role is assumed, so the
+    // ConsoleLogin event for the resulting AssumedRole session carries no MFA
+    // context. Excluding AssumedRole/Role principals keeps this rule focused on
+    // the case that actually matters: an IAM user signing in without MFA.
+    // (Identity Center logins without MFA are caught separately by Rule 18.)
     new events.Rule(this, 'ConsoleLoginNoMFA', {
       ruleName: 'ConsoleLoginNoMFA',
       eventPattern: {
@@ -46,6 +52,9 @@ export class EventBridgeRules extends Construct {
           eventName: ['ConsoleLogin'],
           additionalEventData: {
             MFAUsed: ['No'],
+          },
+          userIdentity: {
+            type: [{ 'anything-but': ['AssumedRole', 'Role'] }],
           },
         },
       },
@@ -234,6 +243,30 @@ export class EventBridgeRules extends Construct {
       eventPattern: {
         source: ['aws.organizations'],
         detailType: ['AWS API Call via CloudTrail'],
+      },
+      targets: [lambdaTarget],
+    });
+
+    // Rule 18: Identity Center sign-in without MFA
+    // Identity Center emits a UserAuthentication event (AwsServiceEvent, so the
+    // detail-type is "AWS Service Event via CloudTrail") whose CredentialType
+    // lists the factors used, e.g. "PASSWORD,WEBAUTHN" for a passkey or
+    // "PASSWORD" alone for single-factor. Matching CredentialType exactly equal
+    // to "PASSWORD" flags an SSO login that completed with a password only —
+    // genuinely missing MFA — while ignoring any login that added a second
+    // factor (WEBAUTHN, TOTP, etc.).
+    new events.Rule(this, 'IdentityCenterLoginNoMFA', {
+      ruleName: 'IdentityCenterLoginNoMFA',
+      eventPattern: {
+        source: ['aws.signin'],
+        detailType: ['AWS Service Event via CloudTrail'],
+        detail: {
+          eventSource: ['signin.amazonaws.com'],
+          eventName: ['UserAuthentication'],
+          additionalEventData: {
+            CredentialType: ['PASSWORD'],
+          },
+        },
       },
       targets: [lambdaTarget],
     });

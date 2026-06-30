@@ -86,6 +86,36 @@ const consoleLoginNoMfaFormatter: Formatter = {
   },
 };
 
+// --- Formatter: Identity Center Login Without MFA ---
+const identityCenterLoginNoMfaFormatter: Formatter = {
+  canHandle(event: CloudTrailEventBridgeEvent): boolean {
+    return (
+      event.source === 'aws.signin' &&
+      event.detail?.eventName === 'UserAuthentication' &&
+      (event.detail?.additionalEventData as Record<string, unknown>)?.CredentialType ===
+        'PASSWORD'
+    );
+  },
+  format(event: CloudTrailEventBridgeEvent): EmailMessage {
+    const f = commonFields(event);
+    const additional = event.detail?.additionalEventData as Record<string, unknown>;
+    const loginTo = additional?.LoginTo ?? 'unknown';
+    return {
+      subject: `[SECURITY] Identity Center Login Without MFA - Account ${f.account}`,
+      body: htmlBody(
+        'Identity Center (SSO) Login Without MFA',
+        row('Event Source', f.source) +
+          row('Timestamp', f.timestamp) +
+          row('Account', f.account) +
+          row('Region', f.region) +
+          row('Source IP', f.sourceIp) +
+          row('Login Target', String(loginTo)) +
+          row('Credential Type', 'PASSWORD (single factor)')
+      ),
+    };
+  },
+};
+
 // --- Formatter 3: Login Failure ---
 const loginFailureFormatter: Formatter = {
   canHandle(event: CloudTrailEventBridgeEvent): boolean {
@@ -462,7 +492,7 @@ const organizationEventFormatter: Formatter = {
 };
 
 /**
- * Ordered array of all 17 formatters.
+ * Ordered array of all formatters.
  * Order matters: more specific formatters come first.
  * The Organizations formatter is last among specific formatters since it's a catch-all for aws.organizations.
  */
@@ -470,6 +500,7 @@ export const formatters: Formatter[] = [
   // Sign-in events (most specific first: Root > NoMFA > Failure)
   rootConsoleLoginFormatter,
   consoleLoginNoMfaFormatter,
+  identityCenterLoginNoMfaFormatter,
   loginFailureFormatter,
   // CloudTrail tampering events
   cloudTrailStopLoggingFormatter,

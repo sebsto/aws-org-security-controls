@@ -3,6 +3,7 @@
     "allow": [
       "Bash(*)",
       "mcp__aws-mcp__aws___search_documentation",
-      "mcp__aws-mcp__aws___read_documentation"    ]
+      "mcp__aws-mcp__aws___read_documentation"
+    ]
   }
 }

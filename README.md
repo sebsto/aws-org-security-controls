@@ -7,7 +7,7 @@ A CDK app that secures your AWS Organization with preventive guardrails, real-ti
 Managing security across multiple AWS accounts is tedious. This project gives you:
 
 - **Preventive controls** — Service Control Policies block dangerous actions before they happen (root usage, unapproved regions, oversized instances, CloudTrail tampering)
-- **Real-time alerts** — 17 EventBridge rules catch security-relevant events and send you an email within minutes (root logins, MFA changes, security group modifications, cost anomalies)
+- **Real-time alerts** — 18 EventBridge rules catch security-relevant events and send you an email within minutes (root logins, MFA changes, security group modifications, cost anomalies)
 - **Automated cost enforcement** — A weekly Lambda scans all member accounts and stops idle resources (EC2, RDS, ECS tasks, unused EIPs)
 - **One-command deploy** — A single `npm run deploy` sets up everything: SCPs, organization trail, event rules, and both Lambda functions, across all regions
 
@@ -27,7 +27,7 @@ flowchart TB
 
         subgraph regional["Regional notifier stack — OrgSecurityNotifier-&lt;region&gt; (N×, every region)"]
             BUS(["Default EventBridge bus"])
-            RULES["17 EventBridge rules"]
+            RULES["18 EventBridge rules"]
             NOTIFIER["Notifier Lambda"]
         end
     end
@@ -52,7 +52,7 @@ flowchart TB
 | Organization CloudTrail | **Global** | 1 (multi-region trail) | Captures all accounts + all regions |
 | S3 log bucket | **Global** | 1 | `RETAIN` on destroy |
 | Watchdog Lambda + schedule | **Global** | 1 | Weekly cross-account cost sweep |
-| 17 EventBridge rules | **Regional** | N (all regions) | One copy per region's default bus |
+| 18 EventBridge rules | **Regional** | N (all regions) | One copy per region's default bus |
 | Notifier Lambda | **Regional** | N (all regions) | Sends via the single SES region |
 | SES verified identities | **Global** | 1 (SES region) | Verify sender + recipient once |
 | CDK bootstrap stack | **Regional** | N (all regions) | One-off, via `bin/bootstrap-all-regions.sh` |
@@ -66,10 +66,10 @@ The app is split into two kinds of stacks:
 
 | Component | Stack | What It Does |
 |-----------|-------|-------------|
-| **DenyServices SCP** | Global | 7 deny statements attached to the org root — blocks unapproved regions, oversized instances, CloudTrail tampering, root usage, IAM user creation, unauthorized Bedrock access |
+| **DenyServices SCP** | Global | 8 deny statements attached to the org root — blocks unapproved regions, oversized instances, CloudTrail tampering, root usage, IAM user creation, SageMaker, unauthorized Bedrock access |
 | **Organization CloudTrail** | Global | Management events from all accounts → S3 bucket + default EventBridge bus |
 | **Watchdog Lambda** | Global | Runs every Friday, assumes into member accounts, stops waste, emails a report |
-| **17 EventBridge Rules** | Regional (×N) | Pattern-match security events → Notifier Lambda |
+| **18 EventBridge Rules** | Regional (×N) | Pattern-match security events → Notifier Lambda |
 | **Notifier Lambda** | Regional (×N) | Formats event details into readable emails via SES (all regions send through one SES region) |
 
 ## Security Events Monitored
@@ -77,7 +77,8 @@ The app is split into two kinds of stacks:
 The Notifier Lambda sends you an email when any of these happen across your organization:
 
 - Root console login
-- Console login without MFA
+- Console login without MFA (IAM users)
+- Identity Center (SSO) login without MFA
 - Failed login attempts
 - CloudTrail logging disabled/deleted/modified
 - IAM user or access key created

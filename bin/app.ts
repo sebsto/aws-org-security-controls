@@ -39,7 +39,7 @@ const globalStack = new OrgSecurityControlsStack(app, 'OrgSecurityControlsStack'
   sesRegion,
 });
 
-// Regional notifier stacks: Notifier Lambda + 17 EventBridge rules, one per region.
+// Regional notifier stacks: Notifier Lambda + 18 EventBridge rules, one per region.
 // Each depends on the global stack so `cdk deploy --all` provisions the SCP and the
 // organization trail (which feeds events to every regional default bus) first.
 for (const region of notifierRegions) {
